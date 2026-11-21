@@ -37,7 +37,7 @@ jobs:
         run: |
           export PATH="$GITHUB_WORKSPACE/clang/bin:$GITHUB_WORKSPACE/gcc64/bin:$PATH"
           mkdir -p out
-          cp "$GITHUB_WORKSPACE/.github/workflows/config_real_celular.txt" out/.config
+          cp "$GITHUB_WORKSPACE/config_real_celular.txt" out/.config
 
           # Mantem MAC80211=m e toda a ABI original intocada; adiciona apenas os drivers USB externos
           ./scripts/config --file out/.config \
