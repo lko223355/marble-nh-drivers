@@ -12,10 +12,10 @@ jobs:
       - name: Baixar arquivos do repositorio (marble_melt.config)
         uses: actions/checkout@v4
 
-      - name: Instalar dependencias
+      - name: Instalar dependencias e linux-firmware
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential ccache curl flex git libelf-dev libssl-dev python3 zip zstd wget lld
+          sudo apt-get install -y bc bison build-essential ccache curl flex git libelf-dev libssl-dev python3 zip zstd wget lld linux-firmware
 
       - name: Baixar ZyC-Clang e GCC64
         run: |
@@ -111,12 +111,11 @@ jobs:
           llvm-strip --strip-unneeded magisk_mod/system/lib/modules/*.ko
           ls -lh magisk_mod/system/lib/modules/*.ko
 
-          RAW_GH="https://githubusercontent.com"
-          wget -q "$RAW_GH/openwrt/firmware_linux/master/ath9k_htc/htc_9271-1.4.0.fw" -O magisk_mod/system/vendor/firmware/htc_9271.fw
-          cp magisk_mod/system/vendor/firmware/htc_9271.fw magisk_mod/system/vendor/firmware/ath9k_htc/htc_9271-1.4.0.fw
-          cp magisk_mod/system/vendor/firmware/htc_9271.fw magisk_mod/system/vendor/firmware/htc_9271-1.4.0.fw
-          wget -q "$RAW_GH/openwrt/firmware_linux/master/rt2870.bin" -O magisk_mod/system/vendor/firmware/rt2870.bin || true
-          wget -q "$RAW_GH/openwrt/firmware_linux/master/mt7601u.bin" -O magisk_mod/system/vendor/firmware/mt7601u.bin || true
+          cp -f /lib/firmware/ath9k_htc/htc_9271-1.4.0.fw magisk_mod/system/vendor/firmware/htc_9271.fw
+          cp -f /lib/firmware/ath9k_htc/htc_9271-1.4.0.fw magisk_mod/system/vendor/firmware/ath9k_htc/htc_9271-1.4.0.fw
+          cp -f /lib/firmware/ath9k_htc/htc_9271-1.4.0.fw magisk_mod/system/vendor/firmware/htc_9271-1.4.0.fw
+          cp -f /lib/firmware/rt2870.bin magisk_mod/system/vendor/firmware/rt2870.bin || true
+          cp -f /lib/firmware/mt7601u.bin magisk_mod/system/vendor/firmware/mt7601u.bin || true
 
           cat << 'EOF_UPD' > magisk_mod/META-INF/com/google/android/update-binary
           #!/sbin/sh
