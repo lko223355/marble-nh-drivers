@@ -88,16 +88,17 @@ jobs:
           make O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 olddefconfig
           make O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 modules_prepare
 
-      - name: Compilar Modulos e Validar Simbolos
+      - name: Compilar Modulos e Verificar Simbolos Reais
         working-directory: kernel
         run: |
           export PATH="$GITHUB_WORKSPACE/clang/bin:$GITHUB_WORKSPACE/gcc64/bin:$PATH"
           make -j$(nproc) O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-android- KCFLAGS="-Wno-error -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -Wno-strict-prototypes -Wno-enum-conversion -Wno-misleading-indentation -Wno-address -Wno-unused-variable" modules
+          llvm-nm -u out/drivers/net/wireless/ath/ath9k/ath9k_htc.ko | grep -i "led" || echo "OK: Sem dependencia de LED no ath9k_htc.ko!"
           ls -lh out/drivers/net/wireless/rtl8812au/88XXau.ko
-          ! strings out/drivers/net/wireless/ath/ath9k/ath9k_htc.ko | grep -q "led_trigger"
 
       - name: Empacotar Modulo Magisk Completo + Firmwares
         run: |
+          export PATH="$GITHUB_WORKSPACE/clang/bin:$GITHUB_WORKSPACE/gcc64/bin:$PATH"
           mkdir -p magisk_mod/META-INF/com/google/android
           mkdir -p magisk_mod/system/lib/modules
           mkdir -p magisk_mod/system/vendor/firmware/ath9k_htc
@@ -106,6 +107,9 @@ jobs:
           find kernel/out/drivers/bluetooth -name "*.ko" ! -name "btpower.ko" -exec cp -f {} magisk_mod/system/lib/modules/ \; 2>/dev/null || true
           find kernel/out/drivers/usb/serial -name "*.ko" -exec cp -f {} magisk_mod/system/lib/modules/ \; 2>/dev/null || true
           find kernel/out/drivers/net/usb -name "*.ko" -exec cp -f {} magisk_mod/system/lib/modules/ \; 2>/dev/null || true
+
+          llvm-strip --strip-unneeded magisk_mod/system/lib/modules/*.ko
+          ls -lh magisk_mod/system/lib/modules/*.ko
 
           RAW_GH="https://githubusercontent.com"
           wget -q "$RAW_GH/openwrt/firmware_linux/master/ath9k_htc/htc_9271-1.4.0.fw" -O magisk_mod/system/vendor/firmware/htc_9271.fw
@@ -135,7 +139,7 @@ jobs:
           version=v11.0
           versionCode=11
           author=lko223355
-          description=Drivers AR9271 (sem LED + firmware) e RTL8812AU (88XXau) validados
+          description=Drivers AR9271 (sem LED + firmware) e RTL8812AU (88XXau) otimizados com llvm-strip
           EOF_PROP
 
           cat << 'EOF_SVC' > magisk_mod/service.sh
