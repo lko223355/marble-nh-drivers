@@ -33,15 +33,17 @@ jobs:
           echo 'source "drivers/net/wireless/rtl8812au/Kconfig"' >> kernel/drivers/net/wireless/Kconfig
           echo 'obj-$(CONFIG_88XXAU) += rtl8812au/' >> kernel/drivers/net/wireless/Makefile
           sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' kernel/drivers/net/wireless/rtl8812au/Makefile
-          sed -i 's/CONFIG_PLATFORM_ARM64_RPI = n/CONFIG_PLATFORM_ARM64_RPI = y/g' kernel/drivers/net/wireless/rtl8812au/Makefile
+          sed -i 's/-Werror//g' kernel/drivers/net/wireless/rtl8812au/Makefile
+          echo 'EXTRA_CFLAGS += -DCONFIG_LITTLE_ENDIAN -DCONFIG_IOCTL_CFG80211 -DRTW_USE_CFG80211_STA_EVENT -Wno-error -Wno-incompatible-function-pointer-types -Wno-strict-prototypes -Wno-enum-conversion -Wno-misleading-indentation -Wno-address -Wno-unused-variable' >> kernel/drivers/net/wireless/rtl8812au/Makefile
           find kernel/drivers/net/wireless/ath -type f \( -name ".c" -o -name ".h" \) -exec sed -i 's/CONFIG_MAC80211_LEDS/CONFIG_DISABLED_MAC80211_LEDS/g' {} +
+
       - name: Configurar Kernel com marble_melt.config
         working-directory: kernel
         run: |
           export PATH="$GITHUB_WORKSPACE/clang/bin:$GITHUB_WORKSPACE/gcc64/bin:$PATH"
           mkdir -p out
           cp "$GITHUB_WORKSPACE/marble_melt.config" out/.config
-          
+
           ./scripts/config --file out/.config \
             --set-str CONFIG_LOCALVERSION "-Melt-v2.5.2" \
             -d CONFIG_LOCALVERSION_AUTO \
@@ -88,7 +90,7 @@ jobs:
         working-directory: kernel
         run: |
           export PATH="$GITHUB_WORKSPACE/clang/bin:$GITHUB_WORKSPACE/gcc64/bin:$PATH"
-          make -j$(nproc) O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-android- KCFLAGS="-Wno-error" modules
+          make -j$(nproc) O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-android- KCFLAGS="-Wno-error -Wno-incompatible-function-pointer-types -Wno-strict-prototypes -Wno-enum-conversion -Wno-misleading-indentation -Wno-address -Wno-unused-variable" modules
           ls -lh out/drivers/net/wireless/rtl8812au/88XXau.ko
           ! strings out/drivers/net/wireless/ath/ath9k/ath9k_htc.ko | grep -q "led_trigger"
 
