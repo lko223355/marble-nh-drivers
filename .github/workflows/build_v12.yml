@@ -1,4 +1,4 @@
-name: Build NetHunter Full Modules v12
+name: Build NetHunter Exact Modules (5.10.208-Melt-v2.5.2)
 
 on:
   workflow_dispatch:
@@ -9,13 +9,13 @@ jobs:
     env:
       GIT_TERMINAL_PROMPT: "0"
     steps:
-      - name: Baixar arquivos do repositorio (marble_melt.config)
+      - name: Baixar config_real_celular.txt do repositorio
         uses: actions/checkout@v4
 
-      - name: Instalar dependencias e linux-firmware
+      - name: Instalar dependencias
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential ccache curl flex git libelf-dev libssl-dev python3 zip zstd wget lld linux-firmware
+          sudo apt-get install -y bc bison build-essential ccache curl flex git libelf-dev libssl-dev python3 zip zstd wget lld
 
       - name: Baixar ZyC-Clang e GCC64
         run: |
@@ -25,53 +25,30 @@ jobs:
           tar -xzf clang.tar.gz -C clang
           git clone --depth=1 "$GH/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git" gcc64
 
-      - name: Clonar Melt Kernel Source e Remover LEDs do ath9k_htc
+      - name: Clonar Melt Kernel Source e Drivers Realtek
         run: |
           GH="https://github.com"
           git clone --depth=1 --recurse-submodules --shallow-submodules "$GH/Pzqqt/android_kernel_xiaomi_marble.git" kernel
-          git clone --depth=1 "$GH/aircrack-ng/rtl8812au.git" kernel/drivers/net/wireless/rtl8812au
-          echo 'source "drivers/net/wireless/rtl8812au/Kconfig"' >> kernel/drivers/net/wireless/Kconfig
-          echo 'obj-$(CONFIG_88XXAU) += rtl8812au/' >> kernel/drivers/net/wireless/Makefile
-          sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' kernel/drivers/net/wireless/rtl8812au/Makefile
-          sed -i 's/-Werror//g' kernel/drivers/net/wireless/rtl8812au/Makefile
-          sed -i 's/-Wno-stringop-overread//g' kernel/drivers/net/wireless/rtl8812au/Makefile
-          sed -i 's/-Wno-stringop-overflow//g' kernel/drivers/net/wireless/rtl8812au/Makefile
-          echo 'EXTRA_CFLAGS += -DCONFIG_LITTLE_ENDIAN -DCONFIG_IOCTL_CFG80211 -DRTW_USE_CFG80211_STA_EVENT -Wno-error -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -Wno-strict-prototypes -Wno-enum-conversion -Wno-misleading-indentation -Wno-address -Wno-unused-variable' >> kernel/drivers/net/wireless/rtl8812au/Makefile
+          git clone --depth=1 "$GH/aircrack-ng/rtl8812au.git" rtl8812au || true
+          git clone --depth=1 "$GH/morrownr/8821cu-20210916.git" rtl8821cu || true
 
-          python3 -c '
-          import glob, re
-          for path in glob.glob("kernel/drivers/net/wireless/ath/ath9k/*.[ch]"):
-              with open(path, "r") as f:
-                  s = f.read()
-              s = s.replace("CONFIG_MAC80211_LEDS", "CONFIG_DISABLED_MAC80211_LEDS")
-              s = re.sub(r"ieee80211_create_tpt_led_trigger\s*\([^;]*\);", "NULL;", s)
-              s = re.sub(r"ieee80211_get_radio_led_name\s*\([^;]*\);", "NULL;", s)
-              with open(path, "w") as f:
-                  f.write(s)
-          '
-
-      - name: Configurar Kernel com marble_melt.config
+      - name: Configurar Usando o config_real_celular.txt Exato
         working-directory: kernel
         run: |
           export PATH="$GITHUB_WORKSPACE/clang/bin:$GITHUB_WORKSPACE/gcc64/bin:$PATH"
           mkdir -p out
-          cp "$GITHUB_WORKSPACE/marble_melt.config" out/.config
+          cp "$GITHUB_WORKSPACE/.github/workflows/config_real_celular.txt" out/.config
 
+          # Mantem MAC80211=m e toda a ABI original intocada; adiciona apenas os drivers USB externos
           ./scripts/config --file out/.config \
-            --set-str CONFIG_LOCALVERSION "-Melt-v2.5.2" \
-            -d CONFIG_LOCALVERSION_AUTO \
-            -e CONFIG_MODVERSIONS \
             -d CONFIG_MODULE_SIG \
             -d CONFIG_MODULE_SIG_ALL \
-            -d CONFIG_MAC80211_LEDS \
-            -d CONFIG_LEDS_TRIGGERS \
             -e CONFIG_WLAN_VENDOR_ATH \
             -m CONFIG_ATH_COMMON \
             -m CONFIG_ATH9K_HW \
             -m CONFIG_ATH9K_COMMON \
             -m CONFIG_ATH9K_HTC \
             -m CONFIG_CARL9170 \
-            -m CONFIG_88XXAU \
             -e CONFIG_WLAN_VENDOR_RALINK \
             -m CONFIG_RT2X00 \
             -m CONFIG_RT2800USB \
@@ -97,34 +74,45 @@ jobs:
             -m CONFIG_USB_SERIAL_PL2303
 
           make O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 olddefconfig
-          make O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 modules_prepare
 
-      - name: Compilar Modulos e Garantir Zero Simbolos de LED no ath9k_htc
+      - name: Compilar Modulos Compatíveis (.ko)
         working-directory: kernel
         run: |
           export PATH="$GITHUB_WORKSPACE/clang/bin:$GITHUB_WORKSPACE/gcc64/bin:$PATH"
-          make -j$(nproc) O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-android- KCFLAGS="-Wno-error -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -Wno-strict-prototypes -Wno-enum-conversion -Wno-misleading-indentation -Wno-address -Wno-unused-variable" modules
-          llvm-nm -u out/drivers/net/wireless/ath/ath9k/ath9k_htc.ko | grep -i "led" && exit 1 || echo "SUCESSO: ath9k_htc.ko 100% livre de simbolos LED!"
+          make -j$(nproc) O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-android- modules
 
-      - name: Empacotar Modulo Magisk Completo + Firmwares
+      - name: Compilar Modulos Externos (RTL8812AU e RTL8821CU)
         run: |
           export PATH="$GITHUB_WORKSPACE/clang/bin:$GITHUB_WORKSPACE/gcc64/bin:$PATH"
+          KDIR="$GITHUB_WORKSPACE/kernel/out"
+
+          if [ -d "$GITHUB_WORKSPACE/rtl8812au" ]; then
+            cd "$GITHUB_WORKSPACE/rtl8812au"
+            sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' Makefile
+            sed -i 's/CONFIG_PLATFORM_ARM64_RPI = n/CONFIG_PLATFORM_ARM64_RPI = y/g' Makefile
+            make -j$(nproc) ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-android- KSRC="$KDIR" KCFLAGS="-Wno-error" modules || true
+          fi
+
+          if [ -d "$GITHUB_WORKSPACE/rtl8821cu" ]; then
+            cd "$GITHUB_WORKSPACE/rtl8821cu"
+            sed -i 's/CONFIG_PLATFORM_I386_PC = y/CONFIG_PLATFORM_I386_PC = n/g' Makefile
+            sed -i 's/CONFIG_PLATFORM_ARM64_RPI = n/CONFIG_PLATFORM_ARM64_RPI = y/g' Makefile
+            make -j$(nproc) ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-android- KSRC="$KDIR" KCFLAGS="-Wno-error" modules || true
+          fi
+
+      - name: Empacotar Modulo Magisk Exato
+        run: |
           mkdir -p magisk_mod/META-INF/com/google/android
           mkdir -p magisk_mod/system/lib/modules
-          mkdir -p magisk_mod/system/vendor/firmware/ath9k_htc
 
-          find kernel/out/drivers/net/wireless -name "*.ko" -exec cp -f {} magisk_mod/system/lib/modules/ \; 2>/dev/null || true
+          find kernel/out/drivers/net/wireless -name "*.ko" ! -name "cnss*" ! -name "wlan_firmware_service.ko" ! -name "mi_cnss*" -exec cp -f {} magisk_mod/system/lib/modules/ \; 2>/dev/null || true
           find kernel/out/drivers/bluetooth -name "*.ko" ! -name "btpower.ko" -exec cp -f {} magisk_mod/system/lib/modules/ \; 2>/dev/null || true
           find kernel/out/drivers/usb/serial -name "*.ko" -exec cp -f {} magisk_mod/system/lib/modules/ \; 2>/dev/null || true
           find kernel/out/drivers/net/usb -name "*.ko" -exec cp -f {} magisk_mod/system/lib/modules/ \; 2>/dev/null || true
+          find rtl8812au -name "*.ko" -exec cp -f {} magisk_mod/system/lib/modules/ \; 2>/dev/null || true
+          find rtl8821cu -name "*.ko" -exec cp -f {} magisk_mod/system/lib/modules/ \; 2>/dev/null || true
 
-          llvm-strip --strip-unneeded magisk_mod/system/lib/modules/*.ko
-
-          cp -f /lib/firmware/ath9k_htc/htc_9271-1.4.0.fw magisk_mod/system/vendor/firmware/htc_9271.fw
-          cp -f /lib/firmware/ath9k_htc/htc_9271-1.4.0.fw magisk_mod/system/vendor/firmware/ath9k_htc/htc_9271-1.4.0.fw
-          cp -f /lib/firmware/ath9k_htc/htc_9271-1.4.0.fw magisk_mod/system/vendor/firmware/htc_9271-1.4.0.fw
-          cp -f /lib/firmware/rt2870.bin magisk_mod/system/vendor/firmware/rt2870.bin || true
-          cp -f /lib/firmware/mt7601u.bin magisk_mod/system/vendor/firmware/mt7601u.bin || true
+          ls -lh magisk_mod/system/lib/modules/*.ko
 
           cat << 'EOF_UPD' > magisk_mod/META-INF/com/google/android/update-binary
           #!/sbin/sh
@@ -143,28 +131,28 @@ jobs:
 
           cat << 'EOF_PROP' > magisk_mod/module.prop
           id=marble_nethunter_drivers
-          name=POCO F5 NetHunter Full Drivers Pack (Melt-v2.5.2)
-          version=v12.0
-          versionCode=12
+          name=POCO F5 NetHunter Exact ABI Drivers (Melt-v2.5.2)
+          version=v11.0
+          versionCode=11
           author=lko223355
-          description=Drivers AR9271 (TL-WN722N v1 sem LED + firmware) e RTL8812AU (88XXau)
+          description=Modulos compilados com o config.gz real do dispositivo (MAC80211=m)
           EOF_PROP
 
           cat << 'EOF_SVC' > magisk_mod/service.sh
           #!/system/bin/sh
           sleep 15
           MODDIR=${0%/*}/system/lib/modules
-          for m in eeprom_93cx6 ath ath9k_hw ath9k_common ath9k_htc carl9170 rt2x00lib rt2x00usb rt2800lib rt2800usb rtl8187 rtl8xxxu 88XXau mt76 mt76-usb mt7601u mt76x02-lib mt76x02-usb mt76x0u mt76x2u usbserial ch341 cp210x ftdi_sio pl2303 usbnet cdc_ether rndis_host ax88179_178a asix btintel btrtl btusb hci_vhci; do
+          for m in eeprom_93cx6 ath ath9k_hw ath9k_common ath9k_htc carl9170 rt2x00lib rt2x00usb rt2800lib rt2800usb rtl8187 rtl8xxxu 88XXau 8821cu mt76 mt76-usb mt7601u mt76x02-lib mt76x02-usb mt76x0u mt76x2u usbserial ch341 cp210x ftdi_sio pl2303 usbnet cdc_ether rndis_host ax88179_178a asix btintel btrtl btusb hci_vhci; do
             [ -f "$MODDIR/$m.ko" ] && insmod "$MODDIR/$m.ko" 2>/dev/null
           done
           EOF_SVC
           chmod +x magisk_mod/service.sh
 
           cd magisk_mod
-          zip -r9 "$GITHUB_WORKSPACE/Magisk-NetHunter-FullPack-v12.zip" *
+          zip -r9 "$GITHUB_WORKSPACE/Magisk-NetHunter-ExactABI-v11.zip" *
 
-      - name: Upload do Modulo Magisk Completo
+      - name: Upload do Modulo Magisk Exato
         uses: actions/upload-artifact@v4
         with:
-          name: Magisk-NetHunter-FullPack-v12
-          path: Magisk-NetHunter-FullPack-v12.zip
+          name: Magisk-NetHunter-ExactABI-v11
+          path: Magisk-NetHunter-ExactABI-v11.zip
