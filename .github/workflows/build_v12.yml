@@ -1,4 +1,4 @@
-name: Build NetHunter Full Modules v11
+name: Build NetHunter Full Modules v12
 
 on:
   workflow_dispatch:
@@ -25,7 +25,7 @@ jobs:
           tar -xzf clang.tar.gz -C clang
           git clone --depth=1 "$GH/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git" gcc64
 
-      - name: Clonar Melt Kernel Source e Integrar RTL8812AU na Arvore
+      - name: Clonar Melt Kernel Source e Remover LEDs do ath9k_htc
         run: |
           GH="https://github.com"
           git clone --depth=1 --recurse-submodules --shallow-submodules "$GH/Pzqqt/android_kernel_xiaomi_marble.git" kernel
@@ -37,7 +37,18 @@ jobs:
           sed -i 's/-Wno-stringop-overread//g' kernel/drivers/net/wireless/rtl8812au/Makefile
           sed -i 's/-Wno-stringop-overflow//g' kernel/drivers/net/wireless/rtl8812au/Makefile
           echo 'EXTRA_CFLAGS += -DCONFIG_LITTLE_ENDIAN -DCONFIG_IOCTL_CFG80211 -DRTW_USE_CFG80211_STA_EVENT -Wno-error -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -Wno-strict-prototypes -Wno-enum-conversion -Wno-misleading-indentation -Wno-address -Wno-unused-variable' >> kernel/drivers/net/wireless/rtl8812au/Makefile
-          find kernel/drivers/net/wireless/ath -type f \( -name ".c" -o -name ".h" \) -exec sed -i 's/CONFIG_MAC80211_LEDS/CONFIG_DISABLED_MAC80211_LEDS/g' {} +
+
+          python3 -c '
+          import glob, re
+          for path in glob.glob("kernel/drivers/net/wireless/ath/ath9k/*.[ch]"):
+              with open(path, "r") as f:
+                  s = f.read()
+              s = s.replace("CONFIG_MAC80211_LEDS", "CONFIG_DISABLED_MAC80211_LEDS")
+              s = re.sub(r"ieee80211_create_tpt_led_trigger\s*\([^;]*\);", "NULL;", s)
+              s = re.sub(r"ieee80211_get_radio_led_name\s*\([^;]*\);", "NULL;", s)
+              with open(path, "w") as f:
+                  f.write(s)
+          '
 
       - name: Configurar Kernel com marble_melt.config
         working-directory: kernel
@@ -88,13 +99,12 @@ jobs:
           make O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 olddefconfig
           make O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 modules_prepare
 
-      - name: Compilar Modulos e Verificar Simbolos Reais
+      - name: Compilar Modulos e Garantir Zero Simbolos de LED no ath9k_htc
         working-directory: kernel
         run: |
           export PATH="$GITHUB_WORKSPACE/clang/bin:$GITHUB_WORKSPACE/gcc64/bin:$PATH"
           make -j$(nproc) O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-android- KCFLAGS="-Wno-error -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -Wno-strict-prototypes -Wno-enum-conversion -Wno-misleading-indentation -Wno-address -Wno-unused-variable" modules
-          llvm-nm -u out/drivers/net/wireless/ath/ath9k/ath9k_htc.ko | grep -i "led" || echo "OK: Sem dependencia de LED no ath9k_htc.ko!"
-          ls -lh out/drivers/net/wireless/rtl8812au/88XXau.ko
+          llvm-nm -u out/drivers/net/wireless/ath/ath9k/ath9k_htc.ko | grep -i "led" && exit 1 || echo "SUCESSO: ath9k_htc.ko 100% livre de simbolos LED!"
 
       - name: Empacotar Modulo Magisk Completo + Firmwares
         run: |
@@ -109,7 +119,6 @@ jobs:
           find kernel/out/drivers/net/usb -name "*.ko" -exec cp -f {} magisk_mod/system/lib/modules/ \; 2>/dev/null || true
 
           llvm-strip --strip-unneeded magisk_mod/system/lib/modules/*.ko
-          ls -lh magisk_mod/system/lib/modules/*.ko
 
           cp -f /lib/firmware/ath9k_htc/htc_9271-1.4.0.fw magisk_mod/system/vendor/firmware/htc_9271.fw
           cp -f /lib/firmware/ath9k_htc/htc_9271-1.4.0.fw magisk_mod/system/vendor/firmware/ath9k_htc/htc_9271-1.4.0.fw
@@ -135,10 +144,10 @@ jobs:
           cat << 'EOF_PROP' > magisk_mod/module.prop
           id=marble_nethunter_drivers
           name=POCO F5 NetHunter Full Drivers Pack (Melt-v2.5.2)
-          version=v11.0
-          versionCode=11
+          version=v12.0
+          versionCode=12
           author=lko223355
-          description=Drivers AR9271 (sem LED + firmware) e RTL8812AU (88XXau) otimizados com llvm-strip
+          description=Drivers AR9271 (TL-WN722N v1 sem LED + firmware) e RTL8812AU (88XXau)
           EOF_PROP
 
           cat << 'EOF_SVC' > magisk_mod/service.sh
@@ -152,10 +161,10 @@ jobs:
           chmod +x magisk_mod/service.sh
 
           cd magisk_mod
-          zip -r9 "$GITHUB_WORKSPACE/Magisk-NetHunter-FullPack-v11.zip" *
+          zip -r9 "$GITHUB_WORKSPACE/Magisk-NetHunter-FullPack-v12.zip" *
 
       - name: Upload do Modulo Magisk Completo
         uses: actions/upload-artifact@v4
         with:
-          name: Magisk-NetHunter-FullPack-v11
-          path: Magisk-NetHunter-FullPack-v11.zip
+          name: Magisk-NetHunter-FullPack-v12
+          path: Magisk-NetHunter-FullPack-v12.zip
