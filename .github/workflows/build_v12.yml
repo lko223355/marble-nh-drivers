@@ -39,7 +39,7 @@ jobs:
           echo 'EXTRA_CFLAGS += -DCONFIG_LITTLE_ENDIAN -DCONFIG_IOCTL_CFG80211 -DRTW_USE_CFG80211_STA_EVENT -Wno-error -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -Wno-strict-prototypes -Wno-enum-conversion -Wno-misleading-indentation -Wno-address -Wno-unused-variable' >> kernel/drivers/net/wireless/rtl8812au/Makefile
 
           python3 -c '
-          import glob, re
+          import re
 
           gpio_file = "kernel/drivers/net/wireless/ath/ath9k/htc_drv_gpio.c"
           with open(gpio_file, "r") as f:
@@ -52,13 +52,13 @@ jobs:
           with open(gpio_file, "w") as f:
               f.write(s)
 
-          for path in glob.glob("kernel/drivers/net/wireless/ath/ath9k/*.[ch]"):
-              with open(path, "r") as f:
-                  s = f.read()
-              s = re.sub(r"ieee80211_get_radio_led_name\s*\([^)]*\)", "\"ath9k-phy\"", s, flags=re.S)
-              s = re.sub(r"ieee80211_create_tpt_led_trigger\s*\([^;]*\);", "", s, flags=re.S)
-              with open(path, "w") as f:
-                  f.write(s)
+          init_file = "kernel/drivers/net/wireless/ath/ath9k/htc_drv_init.c"
+          with open(init_file, "r") as f:
+              s = f.read()
+          s = re.sub(r"ieee80211_get_radio_led_name\s*\([^)]*\)", "\"ath9k-phy\"", s, flags=re.S)
+          s = re.sub(r"ieee80211_create_tpt_led_trigger\s*\([^;]*\);", "", s, flags=re.S)
+          with open(init_file, "w") as f:
+              f.write(s)
           '
 
       - name: Configurar Kernel com config_real_celular.txt
