@@ -96,29 +96,16 @@ jobs:
             -e CONFIG_WLAN_VENDOR_MEDIATEK \
             -m CONFIG_MT7601U \
             -m CONFIG_MT76x0U \
-            -m CONFIG_MT76x2U \
-            -m CONFIG_BT_HCIBTUSB \
-            -m CONFIG_BT_HCIVHCI \
-            -e CONFIG_USB_NET_DRIVERS \
-            -m CONFIG_USB_USBNET \
-            -m CONFIG_USB_NET_AX8817X \
-            -m CONFIG_USB_NET_AX88179_178A \
-            -m CONFIG_USB_NET_CDCETHER \
-            -m CONFIG_USB_NET_RNDIS_HOST \
-            -e CONFIG_USB_SERIAL \
-            -m CONFIG_USB_SERIAL_CH341 \
-            -m CONFIG_USB_SERIAL_CP210X \
-            -m CONFIG_USB_SERIAL_FTDI_SIO \
-            -m CONFIG_USB_SERIAL_PL2303
+            -m CONFIG_MT76x2U
 
           make O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 olddefconfig
           make O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 modules_prepare
 
-      - name: Compilar Modulos e Garantir Zero Simbolos de LED no ath9k_htc
+      - name: Compilar Apenas Drivers Wi-Fi (Rapido) e Validar LEDs
         working-directory: kernel
         run: |
           export PATH="$GITHUB_WORKSPACE/clang/bin:$GITHUB_WORKSPACE/gcc64/bin:$PATH"
-          make -j$(nproc) O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-android- KCFLAGS="-Wno-error -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -Wno-strict-prototypes -Wno-enum-conversion -Wno-misleading-indentation -Wno-address -Wno-unused-variable" modules
+          make -j$(nproc) O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-android- KCFLAGS="-Wno-error -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -Wno-strict-prototypes -Wno-enum-conversion -Wno-misleading-indentation -Wno-address -Wno-unused-variable" M=drivers/net/wireless modules
           llvm-nm -u out/drivers/net/wireless/ath/ath9k/ath9k_htc.ko | grep -i "led" && exit 1 || echo "SUCESSO: ath9k_htc.ko 100% seguro e sem LEDs!"
 
       - name: Empacotar Modulo Magisk Completo + Firmwares
@@ -129,9 +116,6 @@ jobs:
           mkdir -p magisk_mod/system/vendor/firmware/ath9k_htc
 
           find kernel/out/drivers/net/wireless -name "*.ko" -exec cp -f {} magisk_mod/system/lib/modules/ \; 2>/dev/null || true
-          find kernel/out/drivers/bluetooth -name "*.ko" ! -name "btpower.ko" -exec cp -f {} magisk_mod/system/lib/modules/ \; 2>/dev/null || true
-          find kernel/out/drivers/usb/serial -name "*.ko" -exec cp -f {} magisk_mod/system/lib/modules/ \; 2>/dev/null || true
-          find kernel/out/drivers/net/usb -name "*.ko" -exec cp -f {} magisk_mod/system/lib/modules/ \; 2>/dev/null || true
 
           llvm-strip --strip-unneeded magisk_mod/system/lib/modules/*.ko
 
@@ -169,7 +153,7 @@ jobs:
           #!/system/bin/sh
           sleep 15
           MODDIR=${0%/*}/system/lib/modules
-          for m in eeprom_93cx6 ath ath9k_hw ath9k_common ath9k_htc carl9170 rt2x00lib rt2x00usb rt2800lib rt2800usb rtl8187 rtl8xxxu 88XXau mt76 mt76-usb mt7601u mt76x02-lib mt76x02-usb mt76x0u mt76x2u usbserial ch341 cp210x ftdi_sio pl2303 usbnet cdc_ether rndis_host ax88179_178a asix btintel btrtl btusb hci_vhci; do
+          for m in eeprom_93cx6 ath ath9k_hw ath9k_common ath9k_htc carl9170 rt2x00lib rt2x00usb rt2800lib rt2800usb rtl8187 rtl8xxxu 88XXau mt76 mt76-usb mt7601u mt76x02-lib mt76x02-usb mt76x0u mt76x2u; do
             [ -f "$MODDIR/$m.ko" ] && insmod "$MODDIR/$m.ko" 2>/dev/null
           done
           EOF_SVC
