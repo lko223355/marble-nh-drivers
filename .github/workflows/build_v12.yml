@@ -25,7 +25,7 @@ jobs:
           tar -xzf clang.tar.gz -C clang
           git clone --depth=1 "$GH/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git" gcc64
 
-      - name: Clonar Melt Kernel Source e Neutralizar LEDs do ath9k_htc (Sem NULL Panic)
+      - name: Clonar Melt Kernel Source e Neutralizar LEDs do ath9k_htc
         run: |
           GH="https://github.com"
           git clone --depth=1 --recurse-submodules --shallow-submodules "$GH/Pzqqt/android_kernel_xiaomi_marble.git" kernel
@@ -44,8 +44,11 @@ jobs:
           gpio_file = "kernel/drivers/net/wireless/ath/ath9k/htc_drv_gpio.c"
           with open(gpio_file, "r") as f:
               s = f.read()
-          s = re.sub(r"void\s+ath9k_htc_init_leds\s*\([^)]*\)\s*\{.*?\n\}", "void ath9k_htc_init_leds(struct ath9k_htc_priv *priv) {}", s, flags=re.S)
-          s = re.sub(r"void\s+ath9k_htc_deinit_leds\s*\([^)]*\)\s*\{.*?\n\}", "void ath9k_htc_deinit_leds(struct ath9k_htc_priv *priv) {}", s, flags=re.S)
+
+          idx = s.find("ath9k_htc_init_leds")
+          if idx != -1:
+              start_line = s.rfind("\n", 0, idx)
+              s = s[:start_line] + "\nvoid ath9k_htc_init_leds(struct ath9k_htc_priv *priv) {}\nvoid ath9k_htc_deinit_leds(struct ath9k_htc_priv *priv) {}\n"
           with open(gpio_file, "w") as f:
               f.write(s)
 
