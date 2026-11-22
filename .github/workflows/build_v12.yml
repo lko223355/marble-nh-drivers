@@ -1,4 +1,4 @@
-name: Build NetHunter Full Modules v12
+name: Build NetHunter Full Modules v13
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ jobs:
     env:
       GIT_TERMINAL_PROMPT: "0"
     steps:
-      - name: Baixar arquivos do repositorio (marble_melt.config)
+      - name: Baixar arquivos do repositorio (config_real_celular.txt)
         uses: actions/checkout@v4
 
       - name: Instalar dependencias e linux-firmware
@@ -25,7 +25,7 @@ jobs:
           tar -xzf clang.tar.gz -C clang
           git clone --depth=1 "$GH/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git" gcc64
 
-      - name: Clonar Melt Kernel Source e Remover LEDs do ath9k_htc
+      - name: Clonar Melt Kernel Source e Neutralizar LEDs do ath9k_htc (Sem NULL Panic)
         run: |
           GH="https://github.com"
           git clone --depth=1 --recurse-submodules --shallow-submodules "$GH/Pzqqt/android_kernel_xiaomi_marble.git" kernel
@@ -39,23 +39,35 @@ jobs:
           echo 'EXTRA_CFLAGS += -DCONFIG_LITTLE_ENDIAN -DCONFIG_IOCTL_CFG80211 -DRTW_USE_CFG80211_STA_EVENT -Wno-error -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -Wno-strict-prototypes -Wno-enum-conversion -Wno-misleading-indentation -Wno-address -Wno-unused-variable' >> kernel/drivers/net/wireless/rtl8812au/Makefile
 
           python3 -c '
-          import glob, re
-          for path in glob.glob("kernel/drivers/net/wireless/ath/ath9k/*.[ch]"):
-              with open(path, "r") as f:
-                  s = f.read()
-              s = s.replace("CONFIG_MAC80211_LEDS", "CONFIG_DISABLED_MAC80211_LEDS")
-              s = re.sub(r"ieee80211_create_tpt_led_trigger\s*\([^;]*\);", "NULL;", s)
-              s = re.sub(r"ieee80211_get_radio_led_name\s*\([^;]*\);", "NULL;", s)
-              with open(path, "w") as f:
-                  f.write(s)
+          import re
+
+          gpio_file = "kernel/drivers/net/wireless/ath/ath9k/htc_drv_gpio.c"
+          with open(gpio_file, "r") as f:
+              s = f.read()
+          s = re.sub(r"void\s+ath9k_htc_init_leds\s*\([^)]*\)\s*\{.*?\n\}", "void ath9k_htc_init_leds(struct ath9k_htc_priv *priv) {}", s, flags=re.S)
+          s = re.sub(r"void\s+ath9k_htc_deinit_leds\s*\([^)]*\)\s*\{.*?\n\}", "void ath9k_htc_deinit_leds(struct ath9k_htc_priv *priv) {}", s, flags=re.S)
+          with open(gpio_file, "w") as f:
+              f.write(s)
+
+          init_file = "kernel/drivers/net/wireless/ath/ath9k/htc_drv_init.c"
+          with open(init_file, "r") as f:
+              s = f.read()
+          s = re.sub(r"[^\n;]*ieee80211_create_tpt_led_trigger\s*\([^;]*\);", "", s)
+          s = re.sub(r"[^\n;]*ieee80211_get_radio_led_name\s*\([^;]*\);", "", s)
+          with open(init_file, "w") as f:
+              f.write(s)
           '
 
-      - name: Configurar Kernel com marble_melt.config
+      - name: Configurar Kernel com config_real_celular.txt
         working-directory: kernel
         run: |
           export PATH="$GITHUB_WORKSPACE/clang/bin:$GITHUB_WORKSPACE/gcc64/bin:$PATH"
           mkdir -p out
-          cp "$GITHUB_WORKSPACE/marble_melt.config" out/.config
+          if [ -f "$GITHUB_WORKSPACE/config_real_celular.txt" ]; then
+            cp "$GITHUB_WORKSPACE/config_real_celular.txt" out/.config
+          else
+            cp "$GITHUB_WORKSPACE/marble_melt.config" out/.config
+          fi
 
           ./scripts/config --file out/.config \
             --set-str CONFIG_LOCALVERSION "-Melt-v2.5.2" \
@@ -104,7 +116,7 @@ jobs:
         run: |
           export PATH="$GITHUB_WORKSPACE/clang/bin:$GITHUB_WORKSPACE/gcc64/bin:$PATH"
           make -j$(nproc) O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-android- KCFLAGS="-Wno-error -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -Wno-strict-prototypes -Wno-enum-conversion -Wno-misleading-indentation -Wno-address -Wno-unused-variable" modules
-          llvm-nm -u out/drivers/net/wireless/ath/ath9k/ath9k_htc.ko | grep -i "led" && exit 1 || echo "SUCESSO: ath9k_htc.ko 100% livre de simbolos LED!"
+          llvm-nm -u out/drivers/net/wireless/ath/ath9k/ath9k_htc.ko | grep -i "led" && exit 1 || echo "SUCESSO: ath9k_htc.ko 100% seguro e sem LEDs!"
 
       - name: Empacotar Modulo Magisk Completo + Firmwares
         run: |
@@ -144,10 +156,10 @@ jobs:
           cat << 'EOF_PROP' > magisk_mod/module.prop
           id=marble_nethunter_drivers
           name=POCO F5 NetHunter Full Drivers Pack (Melt-v2.5.2)
-          version=v12.0
-          versionCode=12
+          version=v13.0
+          versionCode=13
           author=lko223355
-          description=Drivers AR9271 (TL-WN722N v1 sem LED + firmware) e RTL8812AU (88XXau)
+          description=Drivers AR9271 (TL-WN722N v1 sem crash de LED + firmware) e RTL8812AU (88XXau)
           EOF_PROP
 
           cat << 'EOF_SVC' > magisk_mod/service.sh
@@ -161,10 +173,10 @@ jobs:
           chmod +x magisk_mod/service.sh
 
           cd magisk_mod
-          zip -r9 "$GITHUB_WORKSPACE/Magisk-NetHunter-FullPack-v12.zip" *
+          zip -r9 "$GITHUB_WORKSPACE/Magisk-NetHunter-FullPack-v13.zip" *
 
       - name: Upload do Modulo Magisk Completo
         uses: actions/upload-artifact@v4
         with:
-          name: Magisk-NetHunter-FullPack-v12
-          path: Magisk-NetHunter-FullPack-v12.zip
+          name: Magisk-NetHunter-FullPack-v13
+          path: Magisk-NetHunter-FullPack-v13.zip
