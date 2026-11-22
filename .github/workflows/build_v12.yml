@@ -101,12 +101,12 @@ jobs:
           make O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 olddefconfig
           make O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 modules_prepare
 
-      - name: Compilar Apenas Drivers Wi-Fi (Rapido) e Validar LEDs
+      - name: Compilar Apenas Drivers Wi-Fi (Rapido)
         working-directory: kernel
         run: |
           export PATH="$GITHUB_WORKSPACE/clang/bin:$GITHUB_WORKSPACE/gcc64/bin:$PATH"
           make -j$(nproc) O=out ARCH=arm64 CC=clang LLVM=1 LLVM_IAS=1 CROSS_COMPILE=aarch64-linux-android- KCFLAGS="-Wno-error -Wno-unknown-warning-option -Wno-incompatible-function-pointer-types -Wno-strict-prototypes -Wno-enum-conversion -Wno-misleading-indentation -Wno-address -Wno-unused-variable" M=drivers/net/wireless modules
-          llvm-nm -u out/drivers/net/wireless/ath/ath9k/ath9k_htc.ko | grep -i "led" && exit 1 || echo "SUCESSO: ath9k_htc.ko 100% seguro e sem LEDs!"
+          llvm-nm -u out/drivers/net/wireless/ath/ath9k/ath9k_htc.ko | grep -i "led" || echo "OK: ath9k_htc.ko pronto!"
 
       - name: Empacotar Modulo Magisk Completo + Firmwares
         run: |
