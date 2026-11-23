@@ -83,8 +83,11 @@ jobs:
       - name: Empacotar AnyKernel3 (Somente Image) + Modulo Magisk
         run: |
           export PATH="$GITHUB_WORKSPACE/clang/bin:$GITHUB_WORKSPACE/gcc64/bin:$PATH"
-          git clone --depth=1 https://github.com -b marble AnyKernel3 || git clone --depth=1 https://github.com AnyKernel3
+          GH="https://github.com"
+          git clone --depth=1 "$GH/osm0sis/AnyKernel3.git" AnyKernel3
           sed -i 's/do.devicecheck=1/do.devicecheck=0/g' AnyKernel3/anykernel.sh
+          sed -i 's/block=\/dev\/block\/platform\/omap\/omap_hsmmc.0\/by-name\/boot;/block=auto;/g' AnyKernel3/anykernel.sh
+          sed -i 's/is_slot_device=0;/is_slot_device=auto;/g' AnyKernel3/anykernel.sh
           cp -f kernel/out/arch/arm64/boot/Image AnyKernel3/
           cd AnyKernel3
           zip -r9 "$GITHUB_WORKSPACE/AnyKernel3-Melt-marble-v16.zip" * -x .git\* README.md
